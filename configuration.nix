@@ -83,11 +83,6 @@
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
 
-  # 新增配置，强制使用 X11 会话
-  services.displayManager.sessionCommands = {
-    plasma = "${config.services.xserver.displayManager.sessionPackages.plasma}/bin/startplasma-x11";
-  };
-
   #### Nvidia Stuff ####
   # Enable OpenGL
   hardware.graphics = {
