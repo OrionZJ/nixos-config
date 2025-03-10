@@ -9,7 +9,40 @@
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
     ./clash.nix
-  ];
+  ] ++ [{ # functions & attrs
+    # support fractional scaling for x11 gnome:
+    # refer to https://nixos.wiki/wiki/Overlays#Overriding_a_package_inside_a_scope
+    nixpkgs.overlays = [ (final: prev: {
+      mutter = let
+        mutter-x11-scaling = pkgs.fetchFromGitHub {
+          owner = "puxplaying";
+          repo = "mutter-x11-scaling";
+          rev = "3a3a20ba7ae0af2c312373ebea9a33d912356217";
+          hash = "sha256-aB4pc3qu9/1aYt2Mlj2lWcmW9Qva8BzLx4k4O7lgURk=";
+        };
+      in prev.mutter.overrideAttrs (old: {
+        patches = (pkgs.lib.optionals (old ? patches) old.patches) ++ [
+          "${mutter-x11-scaling}/x11-Add-support-for-fractional-scaling-using-Randr.patch"
+        ];
+      });
+      gnome-control-center = let
+        gnome-control-center-x11-scaling = pkgs.fetchFromGitHub {
+          owner = "puxplaying";
+          repo = "gnome-control-center-x11-scaling";
+          rev = "12ce1fb886e46b96ae9dc278df19536d2093ca6d";
+          hash = "sha256-6DkUzarvI/vZOSda0qmO65gwSvW2NC1gdx45gA21kB8=";
+        };
+      in prev.gnome-control-center.overrideAttrs (old: {
+        patches = (pkgs.lib.optionals (old ? patches) old.patches) ++ [
+          "${gnome-control-center-x11-scaling}/display-Support-UI-scaled-logical-monitor-mode.patch"
+          "${gnome-control-center-x11-scaling}/display-Allow-fractional-scaling-to-be-enabled.patch"
+        ];
+      });
+    }) ];
+
+    # push the overrided mutter and gnome to my cachix
+    cachix_packages = with pkgs; [mutter gnome-control-center];
+  }] ;
 
   euphgh.sys.clash = {
     enable = true;
@@ -46,42 +79,76 @@
     defaultLocale = "en_US.UTF-8";
     supportedLocales = [ "zh_CN.UTF-8/UTF-8" "en_US.UTF-8/UTF-8" ];
     inputMethod.enable = true;
-    inputMethod.type = "fcitx5";
-    inputMethod.fcitx5.addons = with pkgs; [
-      kdePackages.fcitx5-qt
-      fcitx5-chinese-addons
-      fcitx5-nord
+    inputMethod.type = "ibus";
+    inputMethod.ibus.engines = with pkgs.ibus-engines; [
+      libpinyin
+      rime
     ];
   };
 
   # 修复默认中文字体显示问题
+  fonts.packages = with pkgs; [
+    noto-fonts-cjk-sans
+    noto-fonts-cjk-serif
+    noto-fonts-emoji
+    noto-fonts-color-emoji
+    noto-fonts-extra
+    (nerdfonts.override {
+      # The best developer fonts, see https://www.nerdfonts.com/
+      fonts = [
+        "Hack"
+        "Meslo"
+        "SourceCodePro"
+        "FiraCode"
+        "Terminus"
+        "Iosevka"
+        "Monoid"
+        "FantasqueSansMono"
+      ];
+    })
+    # refs to pkgs/data/fonts/roboto-mono/default.nix
+    # (stdenv.mkDerivation {
+    #   name = "my_fonts";
+    #   srcs = [(fetchurl {
+    #     url = "https://github.com/lxgw/LxgwWenKai/releases/download/v1.311/LXGWWenKai-Bold.ttf";
+    #     sha256 = "16111vvjii2hmnigjb44rjj39k8hjawbvwrb3f2f1ph4hv5wnvkn";
+    #   }) (fetchurl {
+    #     url = "https://github.com/lxgw/LxgwWenKai/releases/download/v1.311/LXGWWenKai-Regular.ttf";
+    #     sha256 = "103mvbpg51jvda265f29sjq17jj76dgwz6f1qdmv6d99bb8b6x7w";
+    #   })];
+    #   sourceRoot = "./";
+    #   unpackCmd = ''
+    #     ttfName=$(basename $(stripHash $curSrc))
+    #     cp $curSrc ./$ttfName
+    #   '';
+    #   installPhase = ''
+    #     mkdir -p $out/share/fonts/truetype
+    #     cp -a *.ttf $out/share/fonts/truetype/
+    #   '';
+    # })
+  ];
+  # enable fontDir /run/current-system/sw/share/X11/fonts
   fonts.fontDir.enable = true;
-  fonts = {
-    packages = with pkgs; [
-      jetbrains-mono
-      fira-code-nerdfont
-      noto-fonts-cjk-sans
-      noto-fonts-cjk-serif
-      nerd-font-patcher
-      noto-fonts-emoji
-      noto-fonts-color-emoji
+  fonts.fontconfig.defaultFonts = {
+    monospace = [
+      "DejaVu Sans Mono"
+      "Noto Color Emoji"
+      "Noto Emoji"
     ];
-    fontconfig = {
-      antialias = true;
-      hinting.enable = true;
-      defaultFonts = {
-        emoji = [ "Noto Color Emoji" ];
-        monospace = [ "FiraCode Nerd Font" ];
-        sansSerif = [ "Noto Sans CJK SC" ];
-        serif = [ "Noto Serif CJK SC" ];
-      };
-    };
   };
+
+  services.gpm.enable = true;
+
+  hardware.xone.enable = true;
+
+  # for x11 gesture
+  services.touchegg.enable = true;
 
   # Enable the X11 windowing system.
   services.xserver.enable = true;
-  services.displayManager.sddm.enable = true;
-  services.desktopManager.plasma6.enable = true;
+  services.displayManager.gdm.enable = true;
+  services.displayManager.gdm.wayland = false;
+  services.desktopManager.gnome.enable = true;
 
   #### Nvidia Stuff ####
   # Enable OpenGL
